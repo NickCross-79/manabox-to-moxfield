@@ -12,11 +12,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -28,6 +29,8 @@ import android.widget.Toast;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -35,19 +38,26 @@ import java.nio.charset.StandardCharsets;
 /**
  * Hosts the web app in a WebView.
  *
- * - Loads the published site so updates pushed to main reach the app automatically.
- * - Falls back to the copy bundled in the APK if the site can't be reached (offline,
- *   or before GitHub Pages is set up).
+ * - Serves the web app from https://appassets.androidplatform.net/: the newest update
+ *   downloaded by {@link Updater}, or the copy bundled in the APK.
+ * - Checks for an update on launch (and when brought back to the foreground) and applies
+ *   it straight away; an open file is carried across the reload by the page.
  * - Receives CSV files from the share menu / "open with" and hands them to the page.
  * - Exposes window.Android so the page can save and share the converted CSV,
  *   which a WebView can't do by itself.
  */
 public class MainActivity extends Activity {
-    private static final String FALLBACK_URL = "file:///android_asset/web/index.html";
+    private static final String HOST = "appassets.androidplatform.net";
+    private static final String APP_URL = "https://" + HOST + "/index.html";
     private static final int FILE_CHOOSER_REQUEST = 1;
+    private static final int LAUNCH_WAIT_MS = 3000; // max wait for an update before showing the app
 
     private WebView webView;
-    private boolean usingFallback = false;
+    private Updater updater;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private boolean loaded = false;
+    private boolean checking = false;
+    private boolean firstResume = true;
     private volatile String pendingShare = null; // JSON {name, text}
     private ValueCallback<Uri[]> fileChooserCallback;
 
@@ -82,8 +92,51 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new Client());
         webView.setWebChromeClient(new Chrome());
 
+        updater = new Updater(new File(getFilesDir(), "web"), BuildConfig.MANIFEST_URL,
+                BuildConfig.UPDATE_URL_PREFIX, BuildConfig.WEB_BUILD, BuildConfig.SHELL_API, 8000);
+
         handleIntent(getIntent());
-        webView.loadUrl(BuildConfig.WEB_URL);
+        // Update first, then show the app; don't make the user wait more than a moment.
+        main.postDelayed(this::showApp, LAUNCH_WAIT_MS);
+        checkForUpdate();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (firstResume) firstResume = false;
+        else checkForUpdate();
+    }
+
+    private void showApp() {
+        if (loaded) return;
+        loaded = true;
+        webView.loadUrl(APP_URL);
+    }
+
+    private void checkForUpdate() {
+        if (checking) return;
+        checking = true;
+        new Thread(() -> {
+            int installed = 0;
+            try {
+                installed = updater.checkAndInstall();
+            } catch (Exception ignored) {
+                // Offline or no release yet: keep the current version.
+            }
+            final boolean updated = installed > 0;
+            main.post(() -> {
+                checking = false;
+                if (!loaded) showApp();
+                else if (updated) applyUpdate();
+            });
+        }).start();
+    }
+
+    /** Reload into the new version, letting the page save any open file first. */
+    private void applyUpdate() {
+        webView.evaluateJavascript("window.beforeAppUpdate && window.beforeAppUpdate()",
+                v -> webView.loadUrl(APP_URL + "?b=" + updater.activeBuild()));
     }
 
     @Override
@@ -190,6 +243,11 @@ public class MainActivity extends Activity {
     /** Methods callable from JavaScript as window.Android.*. */
     private class Bridge {
         @JavascriptInterface
+        public String appVersion() {
+            return "b" + updater.activeBuild() + " · app " + BuildConfig.VERSION_NAME;
+        }
+
+        @JavascriptInterface
         public String takeSharedCsv() {
             String s = pendingShare;
             pendingShare = null;
@@ -230,11 +288,7 @@ public class MainActivity extends Activity {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri url = request.getUrl();
-            Uri home = Uri.parse(BuildConfig.WEB_URL);
-            boolean ours = "file".equals(url.getScheme())
-                    || (home.getHost() != null && home.getHost().equals(url.getHost())
-                        && url.getPath() != null && url.getPath().startsWith(home.getPath()));
-            if (ours) return false;
+            if (HOST.equals(url.getHost())) return false;
             // Links like Moxfield open in the browser.
             try {
                 startActivity(new Intent(Intent.ACTION_VIEW, url));
@@ -244,19 +298,45 @@ public class MainActivity extends Activity {
         }
 
         @Override
-        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-            if (request.isForMainFrame()) useFallback();
+        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            Uri url = request.getUrl();
+            if (!HOST.equals(url.getHost())) return null;
+            String path = url.getPath() == null ? "" : url.getPath().replaceFirst("^/+", "");
+            if (path.isEmpty()) path = "index.html";
+            if (path.contains("..")) return notFound();
+            try {
+                InputStream in;
+                File dir = updater.activeDir();
+                if (dir != null) {
+                    File f = new File(dir, path);
+                    if (!f.isFile()) return notFound();
+                    in = new FileInputStream(f);
+                } else {
+                    in = getAssets().open("web/" + path);
+                }
+                WebResourceResponse r = new WebResourceResponse(mimeType(path), "utf-8", in);
+                java.util.Map<String, String> h = new java.util.HashMap<>();
+                h.put("Cache-Control", "no-store");
+                r.setResponseHeaders(h);
+                return r;
+            } catch (Exception e) {
+                return notFound();
+            }
         }
 
-        @Override
-        public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
-            if (request.isForMainFrame() && response.getStatusCode() >= 400) useFallback();
+        private WebResourceResponse notFound() {
+            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null,
+                    new java.io.ByteArrayInputStream(new byte[0]));
         }
 
-        private void useFallback() {
-            if (usingFallback) return;
-            usingFallback = true;
-            webView.loadUrl(FALLBACK_URL);
+        private String mimeType(String path) {
+            if (path.endsWith(".html")) return "text/html";
+            if (path.endsWith(".js")) return "text/javascript";
+            if (path.endsWith(".css")) return "text/css";
+            if (path.endsWith(".png")) return "image/png";
+            if (path.endsWith(".svg")) return "image/svg+xml";
+            if (path.endsWith(".json") || path.endsWith(".webmanifest")) return "application/json";
+            return "application/octet-stream";
         }
     }
 

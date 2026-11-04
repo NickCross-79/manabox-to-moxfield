@@ -1,0 +1,137 @@
+# Publishes the web app as a GitHub Release. The Android app checks
+# releases/latest/download/manifest.json on launch and installs newer builds.
+# Uses the built-in GITHUB_TOKEN; nothing to set up.
+name: Release web update
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "android/**"]
+  workflow_dispatch:
+
+# One publish at a time, in push order; never cancelled halfway.
+concurrency:
+  group: release-web
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  KEEP_RELEASES: "10"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # build number = commit count
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: npm test
+
+      - name: Version
+        id: v
+        run: |
+          build=$(git rev-list --count HEAD)
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "tag=web-b$build" >> "$GITHUB_OUTPUT"
+          echo "asset=web-b$build.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Compare with what's published
+        id: gate
+        env:
+          BUILD: ${{ steps.v.outputs.build }}
+        run: |
+          set -euo pipefail
+          if curl -fsSL --retry 3 -o current.json "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/manifest.json"; then
+            cur=$(python3 tools/release.py verify current.json --field build)
+            echo "Published now: build $cur"
+            if [ "$BUILD" -le "$cur" ]; then
+              echo "::notice::Build $BUILD is not newer than published build $cur; nothing to do."
+              echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          else
+            echo "Nothing published yet."
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          BUILD: ${{ steps.v.outputs.build }}
+          TAG: ${{ steps.v.outputs.tag }}
+          ASSET: ${{ steps.v.outputs.asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python3 tools/release.py pack "build/$ASSET"
+          python3 tools/release.py manifest --zip "build/$ASSET" --build "$BUILD" --commit "$GITHUB_SHA" \
+            --url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$ASSET" \
+            --min-shell "$(cat shell-api.txt)" --out build/manifest.json
+          python3 tools/release.py verify build/manifest.json --zip "build/$ASSET"
+
+      # The zip goes into a draft (invisible to phones), is downloaded again and
+      # checked, then the manifest is added and the release published as latest,
+      # so phones never see a manifest whose zip isn't there.
+      - name: Publish
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ steps.v.outputs.build }}
+          SHA: ${{ steps.v.outputs.sha }}
+          TAG: ${{ steps.v.outputs.tag }}
+          ASSET: ${{ steps.v.outputs.asset }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null | grep -q true; then
+            gh release delete "$TAG" --yes
+          fi
+          gh release create "$TAG" --draft --title "Web build $BUILD ($SHA)" \
+            --notes "Web app build $BUILD from $SHA. The Android app installs this automatically. Don't edit these files: the app checks their SHA-256." \
+            "build/$ASSET"
+          mkdir -p check
+          gh release download "$TAG" -p "$ASSET" -D check --clobber
+          python3 tools/release.py verify build/manifest.json --zip "check/$ASSET"
+          gh release upload "$TAG" build/manifest.json
+          gh release edit "$TAG" --draft=false --latest
+
+      - name: Check the public URLs
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ steps.v.outputs.build }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL -H 'Cache-Control: no-cache' -o pub.json "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/manifest.json" \
+              && [ "$(python3 tools/release.py verify pub.json --field build)" = "$BUILD" ] \
+              && curl -fsSL -o pub.zip "$(python3 tools/release.py verify pub.json --field url)" \
+              && python3 tools/release.py verify pub.json --zip pub.zip; then
+              echo "Phones now see build $BUILD."; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Published files can't be fetched or don't match; removing $TAG so phones keep the previous build."
+          gh release delete "$TAG" --yes --cleanup-tag
+          exit 1
+
+      - name: Remove old builds
+        if: steps.gate.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          gh release list --limit 200 --json tagName --jq '.[].tagName' \
+            | grep '^web-b[0-9]*$' | sort -t b -k2 -n -r | tail -n +$((KEEP_RELEASES + 1)) \
+            | while read -r old; do
+                [ "$old" = "$TAG" ] && continue
+                gh release delete "$old" --yes --cleanup-tag || echo "::warning::Could not delete $old"
+              done

@@ -137,6 +137,12 @@
   // reload into the new version. A file that's on screen is carried across the
   // reload so nothing is lost.
   function setupUpdates() {
+    if (native) {
+      // The Android app downloads updates itself and reloads the page into them.
+      try { $('app-version').textContent = native.appVersion(); } catch { /* older app */ }
+      window.beforeAppUpdate = stashForReload;
+      return;
+    }
     if (!('serviceWorker' in navigator)) return;
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
@@ -150,13 +156,7 @@
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController || reloading) return; // first install: nothing to refresh
-      if (state.text) {
-        try {
-          sessionStorage.setItem(RESTORE_KEY, JSON.stringify({ text: state.text, name: state.sourceName }));
-        } catch {
-          return; // can't carry the file over; the update applies next launch
-        }
-      }
+      if (!stashForReload()) return; // can't carry the file over; the update applies next launch
       reloading = true;
       location.reload();
     });
@@ -164,6 +164,17 @@
       if (e.data && e.data.version) $('app-version').textContent = e.data.version;
     });
     navigator.serviceWorker.ready.then((reg) => reg.active && reg.active.postMessage('version'));
+  }
+
+  // Save the open file so it survives a reload into a new version.
+  function stashForReload() {
+    if (!state.text) return true;
+    try {
+      sessionStorage.setItem(RESTORE_KEY, JSON.stringify({ text: state.text, name: state.sourceName }));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // Android app: the native side calls this when a file is shared to it.
