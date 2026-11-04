@@ -30,6 +30,7 @@
   --danger: #ff8a80; --warn-bg: #3a3220;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);
@@ -90,10 +91,4 @@ a { color: var(--accent); }
 .toggle { display: flex; gap: 12px; align-items: center; }
 .toggle input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
 
-.banner {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  background: var(--surface); border: 1px solid var(--accent); border-radius: 12px;
-  padding: 8px 8px 8px 16px;
-}
-.small-btn { min-height: 36px; padding: 0 14px; }
 footer { text-align: center; padding-top: 8px; }

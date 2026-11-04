@@ -58,8 +58,8 @@ If Mana→Mox doesn't appear in the share sheet, save the CSV from ManaBox to yo
 
 Every push to `main` runs the tests and publishes the app to GitHub Pages. Each deploy stamps the commit
 SHA into the service worker. The installed app checks for a new version whenever you open it or switch back to it,
-then reloads itself (or shows an **Update** button if a conversion is on screen). The version is shown at the
-bottom of the app.
+and reloads itself into it automatically. If a file is open, it's restored after the reload. The version is shown
+at the bottom of the app.
 
 ## Hosting (one-time setup)
 

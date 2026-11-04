@@ -11,6 +11,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
   };
 
+  const RESTORE_KEY = 'restore-after-update';
   setupUpdates();
   const standalone = window.matchMedia('(display-mode: standalone)').matches;
   if (!standalone && !native) $('install-hint').hidden = false;
@@ -24,7 +25,7 @@
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-action]');
     if (!a) return;
-    ({ save, share, reset, reload: () => location.reload() })[a.dataset.action]();
+    ({ save, share, reset })[a.dataset.action]();
   });
 
   function show(id) {
@@ -131,9 +132,10 @@
     show('empty');
   }
 
-  // Auto-update: every deploy changes sw.js, so the browser installs the new
-  // worker, which takes over immediately. We then reload to show the new
-  // version, unless a conversion is on screen, in which case we offer a button.
+  // Auto-update: every deploy changes sw.js. The browser checks for it on load
+  // and when the app is resumed; the new worker takes over immediately and we
+  // reload into the new version. A file that's on screen is carried across the
+  // reload so nothing is lost.
   function setupUpdates() {
     if (!('serviceWorker' in navigator)) return;
     const hadController = !!navigator.serviceWorker.controller;
@@ -145,10 +147,18 @@
       setInterval(check, 60 * 60 * 1000);
     }).catch(() => {});
 
+    let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController) return; // first install, nothing to refresh
-      if (state.text) $('update-banner').hidden = false;
-      else location.reload();
+      if (!hadController || reloading) return; // first install: nothing to refresh
+      if (state.text) {
+        try {
+          sessionStorage.setItem(RESTORE_KEY, JSON.stringify({ text: state.text, name: state.sourceName }));
+        } catch {
+          return; // can't carry the file over; the update applies next launch
+        }
+      }
+      reloading = true;
+      location.reload();
     });
     navigator.serviceWorker.addEventListener('message', (e) => {
       if (e.data && e.data.version) $('app-version').textContent = e.data.version;
@@ -166,6 +176,15 @@
 
   // Pick up a file sent from ManaBox's share menu (stored by sw.js).
   async function checkShared() {
+    // Reloaded for an update while a file was open: put it back.
+    try {
+      const saved = sessionStorage.getItem(RESTORE_KEY);
+      if (saved) {
+        sessionStorage.removeItem(RESTORE_KEY);
+        const { text, name } = JSON.parse(saved);
+        load(text, name);
+      }
+    } catch { /* storage unavailable */ }
     if (native) { window.onAndroidShare(); return; }
     if (!new URLSearchParams(location.search).has('shared')) return;
     history.replaceState(null, '', location.pathname);
