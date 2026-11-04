@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ManaBox to Moxfield</title>
+  <meta name="description" content="Turn a ManaBox collection export into a Moxfield import file, keeping only cards in binders.">
+  <meta name="theme-color" content="#1c192e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="icons/icon-192.png" alt="" width="40" height="40">
+      <div>
+        <h1>ManaBox → Moxfield</h1>
+        <p class="sub">Keeps only cards in your binders</p>
+      </div>
+    </header>
+
+    <section id="empty" class="card">
+      <h2>Send a collection here</h2>
+      <ol class="steps">
+        <li>In ManaBox, export your collection as <b>CSV</b>.</li>
+        <li>In the share menu, pick <b>Mana→Mox</b>.</li>
+      </ol>
+      <p class="muted">Or pick a file you already saved:</p>
+      <label class="btn secondary">
+        Choose CSV file
+        <input id="picker" type="file" accept=".csv,text/csv,text/comma-separated-values,text/plain" hidden>
+      </label>
+      <p id="install-hint" class="muted small" hidden>
+        Tip: install this app (browser menu → <b>Install app</b> / <b>Add to Home screen</b>) so it shows up in ManaBox's share menu.
+      </p>
+    </section>
+
+    <section id="error" class="card error" hidden>
+      <h2>Couldn't read that file</h2>
+      <p id="error-msg"></p>
+      <button class="btn secondary" data-action="reset">Try another file</button>
+    </section>
+
+    <section id="result" hidden>
+      <div class="card hero">
+        <p class="big"><span id="kept-cards">0</span> cards</p>
+        <p class="muted" id="kept-summary"></p>
+        <p class="warn" id="no-type-warning" hidden>
+          This export has no “Binder Type” column, so every card was kept. Export the <b>whole collection</b> from ManaBox to filter by binder.
+        </p>
+        <div class="actions">
+          <button class="btn" data-action="save">Save CSV</button>
+          <button class="btn secondary" data-action="share" id="share-btn" hidden>Share…</button>
+        </div>
+        <p class="muted small" id="filename"></p>
+      </div>
+
+      <div class="card">
+        <h2>Kept</h2>
+        <ul id="kept-list" class="rows"></ul>
+      </div>
+
+      <div class="card" id="removed-card">
+        <h2>Removed</h2>
+        <ul id="removed-list" class="rows"></ul>
+      </div>
+
+      <div class="card">
+        <h2>Options</h2>
+        <label class="toggle">
+          <input type="checkbox" id="opt-tags">
+          <span>Tag cards with their binder name in Moxfield</span>
+        </label>
+      </div>
+
+      <div class="card">
+        <h2>Upload to Moxfield</h2>
+        <ol class="steps">
+          <li>Open your <a href="https://moxfield.com/collection" target="_blank" rel="noopener">Moxfield collection</a>.</li>
+          <li>Tap <b>Import</b> and choose the CSV you just saved.</li>
+          <li>If Moxfield asks whether to add to or replace your collection, choose <b>replace</b> so it matches ManaBox. Adding puts the cards on top of what's already there.</li>
+        </ol>
+      </div>
+
+      <button class="btn ghost" data-action="reset">Convert another file</button>
+    </section>
+  </main>
+  <script src="converter.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -101,12 +101,13 @@
   /**
    * Convert ManaBox CSV text into Moxfield collection CSV text.
    * options:
-   *   includeLists  - include ManaBox "list" binders (often wishlists). Default false.
-   *   binderTags    - add the ManaBox binder name as a Moxfield tag. Default false.
-   *   merge         - combine identical printings into one row. Default true.
+   *   bindersOnly - keep only cards whose ManaBox "Binder Type" is "binder"
+   *                 (drops decks and lists/wishlists). Default true.
+   *   binderTags  - add the ManaBox binder name as a Moxfield tag. Default false.
+   *   merge       - combine identical printings into one row. Default true.
    */
   function convert(text, options) {
-    const opts = Object.assign({ includeLists: false, binderTags: false, merge: true }, options);
+    const opts = Object.assign({ bindersOnly: true, binderTags: false, merge: true }, options);
     const rows = parseCsv(text);
     if (!rows.length) throw new Error('The file is empty.');
 
@@ -134,17 +135,31 @@
 
     const get = (r, i) => (i === -1 ? '' : (r[i] || '').trim());
     const out = new Map();
-    const stats = { inputRows: 0, skippedLists: 0, skippedInvalid: 0, totalCards: 0 };
+    const stats = {
+      inputRows: 0,
+      skippedInvalid: 0,
+      totalCards: 0,
+      hasBinderType: idx.binderType !== -1,
+      kept: {},    // binder name -> card count
+      removed: {}, // binder type -> { cards, binders: { name: count } }
+    };
 
     for (const r of rows.slice(1)) {
       stats.inputRows++;
-      if (!opts.includeLists && get(r, idx.binderType).toLowerCase() === 'list') {
-        stats.skippedLists++;
-        continue;
-      }
       const name = get(r, idx.name);
       const qty = parseInt(get(r, idx.qty), 10);
       if (!name || !(qty > 0)) { stats.skippedInvalid++; continue; }
+
+      const binder = get(r, idx.binder) || '(no binder)';
+      const type = get(r, idx.binderType).toLowerCase();
+      if (opts.bindersOnly && stats.hasBinderType && type !== 'binder') {
+        const t = type || '(none)';
+        const bucket = stats.removed[t] || (stats.removed[t] = { cards: 0, binders: {} });
+        bucket.cards += qty;
+        bucket.binders[binder] = (bucket.binders[binder] || 0) + qty;
+        continue;
+      }
+      stats.kept[binder] = (stats.kept[binder] || 0) + qty;
 
       const rec = {
         count: qty,

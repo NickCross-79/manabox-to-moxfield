@@ -1,0 +1,40 @@
+{
+  "name": "ManaBox to Moxfield",
+  "short_name": "Mana→Mox",
+  "description": "Turn a ManaBox collection export into a Moxfield import file, keeping only cards in binders.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1c192e",
+  "theme_color": "#1c192e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "csv",
+          "accept": [
+            "text/csv",
+            ".csv",
+            "text/comma-separated-values",
+            "application/csv",
+            "text/plain",
+            "application/vnd.ms-excel",
+            "application/octet-stream"
+          ]
+        }
+      ]
+    }
+  }
+}
