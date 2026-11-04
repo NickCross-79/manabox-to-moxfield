@@ -1,5 +1,5 @@
 /* Service worker: offline app shell + Android share-target receiver. */
-const VERSION = 'v1';
+const VERSION = 'dev'; // replaced with the commit SHA on deploy
 const SHELL = `shell-${VERSION}`;
 const SHARED = 'shared-file';
 const ASSETS = [
@@ -9,6 +9,10 @@ const ASSETS = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'version' && e.source) e.source.postMessage({ version: VERSION });
 });
 
 self.addEventListener('activate', (e) => {
@@ -46,7 +50,7 @@ self.addEventListener('fetch', (e) => {
   // Network first so updates land quickly; fall back to cache offline.
   e.respondWith((async () => {
     try {
-      const res = await fetch(e.request);
+      const res = await fetch(e.request, { cache: 'no-cache' });
       if (res.ok) (await caches.open(SHELL)).put(e.request, res.clone());
       return res;
     } catch {

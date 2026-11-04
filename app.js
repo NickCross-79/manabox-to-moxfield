@@ -9,9 +9,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
   };
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  setupUpdates();
   const standalone = window.matchMedia('(display-mode: standalone)').matches;
   if (!standalone) $('install-hint').hidden = false;
 
@@ -30,7 +28,7 @@
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-action]');
     if (!a) return;
-    ({ save, share, reset })[a.dataset.action]();
+    ({ save, share, reset, reload: () => location.reload() })[a.dataset.action]();
   });
 
   function show(id) {
@@ -131,6 +129,31 @@
   function reset() {
     state.text = state.output = null;
     show('empty');
+  }
+
+  // Auto-update: every deploy changes sw.js, so the browser installs the new
+  // worker, which takes over immediately. We then reload to show the new
+  // version, unless a conversion is on screen, in which case we offer a button.
+  function setupUpdates() {
+    if (!('serviceWorker' in navigator)) return;
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check();
+      });
+      setInterval(check, 60 * 60 * 1000);
+    }).catch(() => {});
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return; // first install, nothing to refresh
+      if (state.text) $('update-banner').hidden = false;
+      else location.reload();
+    });
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data && e.data.version) $('app-version').textContent = e.data.version;
+    });
+    navigator.serviceWorker.ready.then((reg) => reg.active && reg.active.postMessage('version'));
   }
 
   // Pick up a file sent from ManaBox's share menu (stored by sw.js).

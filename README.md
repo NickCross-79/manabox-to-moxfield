@@ -35,10 +35,17 @@ If Mana→Mox doesn't appear in the share sheet, save the CSV from ManaBox to yo
 
 Options: **Tag cards with their binder name** adds each ManaBox binder name as a Moxfield tag.
 
+## Updates
+
+Every push to `main` runs the tests and publishes the app to GitHub Pages. Each deploy stamps the commit
+SHA into the service worker. The installed app checks for a new version whenever you open it or switch back to it,
+then reloads itself (or shows an **Update** button if a conversion is on screen). The version is shown at the
+bottom of the app.
+
 ## Hosting (one-time setup)
 
-The workflow in `.github/workflows/pages.yml` runs the tests and publishes the app to GitHub Pages on every push
-to the default branch. If the first run fails at the Pages step, enable Pages manually:
+The workflow in `.github/workflows/pages.yml` publishes pushes to `main` (and to the default branch, until `main`
+exists). If the first run fails at the Pages step, enable Pages manually:
 repo **Settings → Pages → Source: GitHub Actions**, then re-run the workflow.
 
 ## Development
