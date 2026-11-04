@@ -22,6 +22,26 @@ Everything runs on your phone. Your collection is never uploaded anywhere.
 2. Chrome menu (⋮) → **Install app** (or **Add to Home screen**).
 3. Done. "Mana→Mox" now appears in Android's share menu.
 
+### Or install the APK
+
+`android/` contains a small Android app (`Mana→Mox`) that does the same thing as a regular installed app:
+
+- Appears in the share menu (and "Open with") for CSV files.
+- Loads the published web app, so updates pushed to `main` reach it automatically.
+- Falls back to a copy of the web app built into the APK when offline or if the site isn't reachable.
+- **Save CSV** writes to your Downloads folder; **Share…** sends it to any app.
+
+To install: download the APK, open it, and allow "Install unknown apps" for your browser or file manager when
+asked. Android may warn that the app is from an unknown developer, because it isn't from the Play Store.
+
+Build it yourself with `cd android && ./gradlew assembleRelease` (needs the Android SDK; set `sdk.dir` in
+`android/local.properties`). The output is `android/app/build/outputs/apk/release/app-release.apk`. GitHub
+Actions also builds it whenever `android/` changes (the **Build Android APK** workflow, under Artifacts).
+
+The APK is signed with the build machine's debug key. An APK built on a different machine has a different key, so
+Android won't install it over the old one: uninstall the old app first. This only matters for changes to the
+Android shell itself. Web app updates don't need a new APK.
+
 ## Use it
 
 1. ManaBox → Collection → **Export** → **CSV**. Export the **whole collection**, since the binder filter needs the
@@ -61,3 +81,4 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | `app.js`, `index.html`, `style.css` | The app UI |
 | `sw.js` | Service worker: offline support and receiving files from the share menu |
 | `manifest.webmanifest` | Install metadata and the Android `share_target` registration |
+| `android/` | Native Android app shell (share-menu receiver, save/share bridge, offline fallback) |

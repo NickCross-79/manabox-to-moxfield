@@ -3,6 +3,8 @@
   const { convert } = window.ManaboxToMoxfield;
   const $ = (id) => document.getElementById(id);
   const state = { text: null, sourceName: null, output: null, outName: null };
+  // Present when running inside the Android app (see android/.../MainActivity.java).
+  const native = window.Android;
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -11,7 +13,7 @@
 
   setupUpdates();
   const standalone = window.matchMedia('(display-mode: standalone)').matches;
-  if (!standalone) $('install-hint').hidden = false;
+  if (!standalone && !native) $('install-hint').hidden = false;
 
   $('opt-tags').checked = store.get('binderTags') === '1';
   $('opt-tags').addEventListener('change', (e) => {
@@ -108,10 +110,12 @@
   }
 
   function canShareFile() {
+    if (native) return true;
     try { return !!navigator.canShare && navigator.canShare({ files: [outFile()] }); } catch { return false; }
   }
 
   function save() {
+    if (native) { native.saveCsv(state.outName, state.output); return; }
     const url = URL.createObjectURL(new Blob([state.output], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;
@@ -123,6 +127,7 @@
   }
 
   async function share() {
+    if (native) { native.shareCsv(state.outName, state.output); return; }
     try { await navigator.share({ files: [outFile()], title: state.outName }); } catch { /* cancelled */ }
   }
 
@@ -156,8 +161,17 @@
     navigator.serviceWorker.ready.then((reg) => reg.active && reg.active.postMessage('version'));
   }
 
+  // Android app: the native side calls this when a file is shared to it.
+  window.onAndroidShare = function () {
+    const s = native && native.takeSharedCsv();
+    if (!s) return;
+    const { name, text } = JSON.parse(s);
+    load(text, name);
+  };
+
   // Pick up a file sent from ManaBox's share menu (stored by sw.js).
   async function checkShared() {
+    if (native) { window.onAndroidShare(); return; }
     if (!new URLSearchParams(location.search).has('shared')) return;
     history.replaceState(null, '', location.pathname);
     try {
