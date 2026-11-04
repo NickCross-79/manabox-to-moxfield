@@ -1,0 +1,10 @@
+{
+  "name": "manabox-to-moxfield",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Convert a ManaBox collection CSV export into Moxfield's collection import format",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT"
+}
