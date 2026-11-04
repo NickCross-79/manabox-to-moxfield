@@ -1,16 +1,13 @@
 # Builds the Android app and attaches it to a prerelease (never "latest", which
 # belongs to the web update manifest). Runs when the Android shell changes, or by hand.
-#
-# Signing: set secrets APK_KEYSTORE_BASE64 (base64 of the keystore file) and
-# APK_KEYSTORE_PASSWORD (optional APK_KEY_ALIAS, default androiddebugkey) so every
-# APK has the same key and installs over the last one. Without them the APK is
-# only uploaded as a workflow artifact.
+# Needs no setup. Each build is signed with the build machine's own key, so installing
+# a new APK means uninstalling the old app first. Web updates never need a new APK.
 name: Build Android app
 
 on:
   push:
     branches: [main]
-    paths: ["android/**", "shell-api.txt", ".github/workflows/apk.yml"]
+    paths: ["android/**", "shell-api.txt"]
   workflow_dispatch:
 
 concurrency:
@@ -41,30 +38,12 @@ jobs:
           echo "sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
           echo "apk=ManaBox-to-Moxfield-b$build.apk" >> "$GITHUB_OUTPUT"
 
-      - name: Signing key
-        id: key
-        env:
-          KS_B64: ${{ secrets.APK_KEYSTORE_BASE64 }}
-          KS_PASS: ${{ secrets.APK_KEYSTORE_PASSWORD }}
-          KS_ALIAS: ${{ secrets.APK_KEY_ALIAS }}
-        run: |
-          if [ -z "$KS_B64" ]; then
-            echo "::warning::APK_KEYSTORE_BASE64 is not set; building with a throwaway key and not publishing a release (it couldn't install over your current app)."
-            echo "signed=false" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/app.keystore"
-          {
-            echo "args=-PkeystorePath=$RUNNER_TEMP/app.keystore -PkeystorePassword=${KS_PASS:-android} -PkeyAlias=${KS_ALIAS:-androiddebugkey}"
-            echo "signed=true"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Tests and build
         working-directory: android
         env:
           BUILD: ${{ steps.v.outputs.build }}
-          SIGN_ARGS: ${{ steps.key.outputs.args }}
         run: |
-          ./gradlew testReleaseUnitTest assembleRelease --no-daemon -PwebBuild="$BUILD" $SIGN_ARGS
+          ./gradlew testReleaseUnitTest assembleRelease --no-daemon -PwebBuild="$BUILD"
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/${{ steps.v.outputs.apk }}"
 
       - uses: actions/upload-artifact@v4
@@ -73,7 +52,6 @@ jobs:
           path: ${{ steps.v.outputs.apk }}
 
       - name: Attach to a release
-        if: steps.key.outputs.signed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD: ${{ steps.v.outputs.build }}
@@ -84,5 +62,5 @@ jobs:
           tag="apk-b$BUILD"
           gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$tag" --prerelease --latest=false --title "Android app build $BUILD ($SHA)" \
-            --notes "Install on your phone (it installs over the previous version). Web updates then arrive by themselves." "$APK"
+            --notes "Uninstall the old Mana→Mox app first, then install this one. Web updates then arrive by themselves." "$APK"
           echo "Download: https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$APK" >> "$GITHUB_STEP_SUMMARY"

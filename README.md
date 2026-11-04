@@ -22,7 +22,7 @@ Everything runs on your phone. Your collection is never uploaded anywhere.
    app is from an unknown developer, because it isn't from the Play Store.
 3. Done. **Mana→Mox** now appears in Android's share menu (and "Open with" for CSV files).
 
-You only reinstall when the Android part itself changes. Changes to the web app arrive by themselves (see
+You only reinstall (uninstall, then install the new APK) when the Android part itself changes. Changes to the web app arrive by themselves (see
 [Updates](#updates)).
 
 ## Use it
@@ -70,16 +70,10 @@ The **Build Android app** workflow runs when `android/` or `shell-api.txt` chang
 the updater tests, builds the APK and attaches it to an `apk-b{N}` prerelease. Prereleases never become "latest",
 so they don't interfere with the web manifest.
 
-Every APK must be signed with the same key to install over the previous one. One-time setup in **Settings →
-Secrets and variables → Actions**:
-
-| Secret | Value |
-| --- | --- |
-| `APK_KEYSTORE_BASE64` | The keystore file, base64-encoded |
-| `APK_KEYSTORE_PASSWORD` | Its password |
-| `APK_KEY_ALIAS` | Optional; defaults to `androiddebugkey` |
-
-Without these, the workflow still builds the APK (as a workflow artifact) but doesn't publish a release.
+No setup is needed. Each APK is signed with the build machine's own key, and Android only installs an update
+signed with the same key, so **uninstall the old app before installing a new APK**. Nothing is lost: the app
+doesn't store your collection. New APKs are only needed when `android/` or `shell-api.txt` changes. Everything else
+arrives as a web update.
 
 ## Development
 
