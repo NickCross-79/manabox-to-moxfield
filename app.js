@@ -15,12 +15,6 @@
   const standalone = window.matchMedia('(display-mode: standalone)').matches;
   if (!standalone && !native) $('install-hint').hidden = false;
 
-  $('opt-tags').checked = store.get('binderTags') === '1';
-  $('opt-tags').addEventListener('change', (e) => {
-    store.set('binderTags', e.target.checked ? '1' : '0');
-    if (state.text) run();
-  });
-
   $('picker').addEventListener('change', async (e) => {
     const f = e.target.files[0];
     if (f) load(await f.text(), f.name);
@@ -47,14 +41,14 @@
   function run() {
     let res;
     try {
-      res = convert(state.text, { bindersOnly: true, binderTags: $('opt-tags').checked });
+      res = convert(state.text, { bindersOnly: true });
     } catch (err) {
       $('error-msg').textContent = err.message;
       show('error');
       return;
     }
-    const { csv, records, stats } = res;
-    if (!records.length) {
+    const { csv, stats } = res;
+    if (!stats.outputRows) {
       const removed = Object.values(stats.removed).reduce((n, b) => n + b.cards, 0);
       $('error-msg').textContent = removed
         ? `No cards are in binders. ${removed} cards were in decks or lists and were removed.`
@@ -63,13 +57,14 @@
       return;
     }
     state.output = csv;
-    state.outName = `moxfield-collection-${new Date().toISOString().slice(0, 10)}.csv`;
+    state.outName = `manabox-binders-${new Date().toISOString().slice(0, 10)}.csv`;
 
     const kept = Object.entries(stats.kept).sort((a, b) => b[1] - a[1]);
     $('kept-cards').textContent = stats.totalCards.toLocaleString();
     $('kept-summary').textContent =
-      `from ${kept.length} binder${kept.length === 1 ? '' : 's'} · ${records.length.toLocaleString()} unique rows`;
+      `from ${kept.length} binder${kept.length === 1 ? '' : 's'} · ${stats.outputRows.toLocaleString()} rows`;
     $('no-type-warning').hidden = stats.hasBinderType;
+    $('no-scryfall-warning').hidden = stats.hasScryfallId;
     $('filename').textContent = state.outName;
 
     $('kept-list').replaceChildren(...kept.map(([name, n]) => row(name, n)));

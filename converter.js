@@ -99,15 +99,19 @@
   const truthy = (v) => ['true', 'yes', '1'].includes((v || '').trim().toLowerCase());
 
   /**
-   * Convert ManaBox CSV text into Moxfield collection CSV text.
+   * Filter a ManaBox CSV export and prepare it for Moxfield.
    * options:
+   *   format      - 'manabox' (default): the original ManaBox CSV with every column
+   *                 (including Scryfall ID, which Moxfield's ManaBox importer requires),
+   *                 minus the rows that were filtered out.
+   *                 'moxfield': Moxfield's generic collection CSV format.
    *   bindersOnly - keep only cards whose ManaBox "Binder Type" is "binder"
    *                 (drops decks and lists/wishlists). Default true.
-   *   binderTags  - add the ManaBox binder name as a Moxfield tag. Default false.
-   *   merge       - combine identical printings into one row. Default true.
+   *   binderTags  - ('moxfield' format) add the binder name as a tag. Default false.
+   *   merge       - ('moxfield' format) combine identical printings. Default true.
    */
   function convert(text, options) {
-    const opts = Object.assign({ bindersOnly: true, binderTags: false, merge: true }, options);
+    const opts = Object.assign({ format: 'manabox', bindersOnly: true, binderTags: false, merge: true }, options);
     const rows = parseCsv(text);
     if (!rows.length) throw new Error('The file is empty.');
 
@@ -128,6 +132,7 @@
       price: col('Purchase price'),
       binder: col('Binder Name', 'Binder'),
       binderType: col('Binder Type'),
+      scryfallId: col('Scryfall ID'),
     };
     if (idx.name === -1 || idx.qty === -1) {
       throw new Error('This does not look like a ManaBox export (missing "Name" or "Quantity" column).');
@@ -135,7 +140,10 @@
 
     const get = (r, i) => (i === -1 ? '' : (r[i] || '').trim());
     const out = new Map();
+    const keptRows = [];
     const stats = {
+      format: opts.format,
+      hasScryfallId: idx.scryfallId !== -1,
       inputRows: 0,
       skippedInvalid: 0,
       totalCards: 0,
@@ -160,6 +168,7 @@
         continue;
       }
       stats.kept[binder] = (stats.kept[binder] || 0) + qty;
+      keptRows.push(r);
 
       const rec = {
         count: qty,
@@ -183,11 +192,13 @@
     }
 
     const records = [...out.values()];
-    const csv = toCsv([MOXFIELD_HEADERS].concat(records.map((x) => [
-      x.count, 0, x.name, x.edition, x.condition, x.language, x.foil, x.tags,
-      '', x.number, x.alter, 'False', x.price,
-    ])));
-    stats.outputRows = records.length;
+    const csv = opts.format === 'moxfield'
+      ? toCsv([MOXFIELD_HEADERS].concat(records.map((x) => [
+          x.count, 0, x.name, x.edition, x.condition, x.language, x.foil, x.tags,
+          '', x.number, x.alter, 'False', x.price,
+        ])))
+      : toCsv([rows[0]].concat(keptRows));
+    stats.outputRows = opts.format === 'moxfield' ? records.length : keptRows.length;
     return { csv, records, stats };
   }
 

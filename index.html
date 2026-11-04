@@ -54,6 +54,9 @@
         <p class="warn" id="no-type-warning" hidden>
           This export has no “Binder Type” column, so every card was kept. Export the <b>whole collection</b> from ManaBox to filter by binder.
         </p>
+        <p class="warn" id="no-scryfall-warning" hidden>
+          This export has no “Scryfall ID” column, and Moxfield needs it. Export again from ManaBox with the <b>Scryfall ID</b> column included.
+        </p>
         <div class="actions">
           <button class="btn" data-action="save">Save CSV</button>
           <button class="btn secondary" data-action="share" id="share-btn" hidden>Share…</button>
@@ -72,18 +75,10 @@
       </div>
 
       <div class="card">
-        <h2>Options</h2>
-        <label class="toggle">
-          <input type="checkbox" id="opt-tags">
-          <span>Tag cards with their binder name in Moxfield</span>
-        </label>
-      </div>
-
-      <div class="card">
         <h2>Upload to Moxfield</h2>
         <ol class="steps">
           <li>Open your <a href="https://moxfield.com/collection" target="_blank" rel="noopener">Moxfield collection</a>.</li>
-          <li>Tap <b>Import</b> and choose the CSV you just saved.</li>
+          <li>Tap <b>Import</b>, choose <b>ManaBox</b> as the format if asked, and pick the CSV you just saved.</li>
           <li>If Moxfield asks whether to add to or replace your collection, choose <b>replace</b> so it matches ManaBox. Adding puts the cards on top of what's already there.</li>
         </ol>
       </div>

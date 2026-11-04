@@ -4,10 +4,10 @@ An Android app (installable web app) that shows up in ManaBox's **export / share
 Send it your ManaBox collection CSV and it:
 
 1. **Keeps only cards in binders**: cards in decks and lists (wishlists) are removed.
-2. Merges the same printing across binders into one row.
-3. Converts it to **Moxfield's collection import format** (condition, language, foil, set code, collector number).
+2. Leaves everything else exactly as ManaBox exported it, including the **Scryfall ID** column that
+   Moxfield's ManaBox importer uses to match the exact printing.
 
-You then save the CSV and upload it with Moxfield's collection import.
+You then save the CSV and upload it with Moxfield's collection import (format: ManaBox).
 
 > Why not sync to Moxfield automatically? Moxfield has no public API, and automating its website
 > is against its Terms of Service. If Moxfield ever grants API access
@@ -48,12 +48,11 @@ Android shell itself. Web app updates don't need a new APK.
    "Binder Type" column that the whole-collection export includes.
 2. In the share sheet, tap **Mana→Mox**.
 3. Check the Kept / Removed summary, then tap **Save CSV** (or **Share…** to send it to Drive, email and so on).
-4. In Moxfield: **Collection → Import**, then pick the saved file.
+4. In Moxfield: **Collection → Import**, choose **ManaBox** as the format if asked, and pick the saved file.
+   If Moxfield says "No Scryfall ID found", export again from ManaBox with the Scryfall ID column included.
 
 If Mana→Mox doesn't appear in the share sheet, save the CSV from ManaBox to your phone and use
 **Choose CSV file** in the app instead.
-
-Options: **Tag cards with their binder name** adds each ManaBox binder name as a Moxfield tag.
 
 ## Updates
 

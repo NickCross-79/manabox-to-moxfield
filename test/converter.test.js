@@ -15,8 +15,21 @@ test('parses quoted fields', () => {
   assert.deepStrictEqual(parseCsv('a,"b, c","d""e"\r\n1,2,3'), [['a', 'b, c', 'd"e'], ['1', '2', '3']]);
 });
 
-test('keeps only binder cards, merges duplicates', () => {
-  const { records, stats, csv } = convert(SAMPLE);
+test('default output is the original ManaBox CSV with only binder rows', () => {
+  const { csv, stats } = convert(SAMPLE);
+  const rows = parseCsv(csv);
+  const src = parseCsv(SAMPLE);
+  assert.deepStrictEqual(rows[0], src[0], 'header (incl. Scryfall ID) unchanged');
+  assert.deepStrictEqual(rows.slice(1), src.slice(1, 4), 'binder rows kept verbatim');
+  assert.strictEqual(stats.outputRows, 3);
+  assert.strictEqual(stats.hasScryfallId, true);
+  assert.strictEqual(stats.totalCards, 4);
+  assert.strictEqual(stats.removed.deck.cards, 1);
+  assert.strictEqual(stats.removed.list.cards, 1);
+});
+
+test('moxfield format: keeps only binder cards, merges duplicates', () => {
+  const { records, stats, csv } = convert(SAMPLE, { format: 'moxfield' });
   assert.strictEqual(stats.removed.list.cards, 1);
   assert.strictEqual(stats.removed.deck.cards, 1);
   assert.deepStrictEqual(stats.kept, { 'Trade Binder': 2, Main: 2 });
@@ -35,7 +48,7 @@ test('keeps only binder cards, merges duplicates', () => {
 });
 
 test('binder tags keep binders separate; filter can be disabled', () => {
-  const { records } = convert(SAMPLE, { binderTags: true, bindersOnly: false });
+  const { records } = convert(SAMPLE, { format: 'moxfield', binderTags: true, bindersOnly: false });
   assert.strictEqual(records.length, 5);
   assert.ok(records.some((r) => r.tags === 'Trade Binder' && r.count === 2));
 });
@@ -44,6 +57,8 @@ test('exports without a Binder Type column keep every card', () => {
   const csv = 'Name,Set code,Collector number,Foil,Quantity,Condition,Language\nSol Ring,c21,263,normal,2,near_mint,en';
   const { records, stats } = convert(csv);
   assert.strictEqual(stats.hasBinderType, false);
+  assert.strictEqual(stats.hasScryfallId, false);
+  assert.strictEqual(stats.outputRows, 1);
   assert.strictEqual(records[0].count, 2);
 });
 
