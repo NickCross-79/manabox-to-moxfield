@@ -45,8 +45,8 @@ bottom of the app.
 ## Hosting (one-time setup)
 
 The workflow in `.github/workflows/pages.yml` publishes pushes to `main` (and to the default branch, until `main`
-exists). If the first run fails at the Pages step, enable Pages manually:
-repo **Settings → Pages → Source: GitHub Actions**, then re-run the workflow.
+exists). GitHub doesn't let a workflow switch Pages on, so do it once by hand:
+repo **Settings → Pages → Build and deployment → Source: GitHub Actions**, then re-run the workflow.
 
 ## Development
 

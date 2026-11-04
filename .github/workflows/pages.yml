@@ -43,9 +43,8 @@ jobs:
           sed -i "s/const VERSION = 'dev';/const VERSION = '$V';/" _site/sw.js
           sed -i "s/<span id=\"app-version\">dev<\/span>/<span id=\"app-version\">$V<\/span>/" _site/index.html
           grep -q "const VERSION = '$V'" _site/sw.js
+      # Requires Settings -> Pages -> Source: GitHub Actions (one-time).
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
